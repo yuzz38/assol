@@ -1,8 +1,7 @@
 const db = require('./database');
 const { formatDate } = require('./dateUtils');
 
-// Записи, время которых уже прошло, автоматически переводим из "active" в "completed".
-// Это же освобождает их слоты для новых записей.
+// Записи, время которые уже прошли, автоматически переводим из "active" в "completed".
 function autoCompletePastAppointments() {
   const now = new Date();
   const today = formatDate(now);
