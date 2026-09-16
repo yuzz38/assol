@@ -28,12 +28,15 @@ const api = (() => {
     logout: () => request('POST', '/logout'),
     me: () => request('GET', '/me'),
 
+    getServices: () => request('GET', '/services'),
+    getDoctorsByService: (serviceId) => request('GET', `/services/${serviceId}/doctors`),
+
     getDoctors: () => request('GET', '/doctors'),
     getDoctorSlots: (doctorId, days = 14) => request('GET', `/doctors/${doctorId}/slots?days=${days}`),
 
     getAppointments: () => request('GET', '/appointments'),
     getAppointment: (id) => request('GET', `/appointments/${id}`),
-    createAppointment: (doctorId, date, time) => request('POST', '/appointments', { doctorId, date, time }),
+    createAppointment: (doctorId, serviceId, date, time) => request('POST', '/appointments', { doctorId, serviceId, date, time }),
     cancelAppointment: (id) => request('PUT', `/appointments/${id}/cancel`),
     rescheduleAppointment: (id, doctorId, date, time) => request('PUT', `/appointments/${id}/reschedule`, { doctorId, date, time })
   };

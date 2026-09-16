@@ -5,6 +5,7 @@ const path = require('path');
 const db = require('./db/database');
 const authRoutes = require('./routes/auth');
 const doctorsRoutes = require('./routes/doctors');
+const servicesRoutes = require('./routes/services');
 const appointmentsRoutes = require('./routes/appointments');
 
 const PORT = process.env.PORT || 3000;
@@ -28,6 +29,7 @@ async function main() {
 
   app.use('/api', authRoutes);
   app.use('/api/doctors', doctorsRoutes);
+  app.use('/api/services', servicesRoutes);
   app.use('/api/appointments', appointmentsRoutes);
 
   // Статика фронтенда (html/css/js/img)

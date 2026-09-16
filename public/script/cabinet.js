@@ -123,23 +123,24 @@ async function renderActiveAppointments() {
 
   list.innerHTML = appts.map(a => {
     const canCancel = canCancelAppointment(a.date, a.time);
-    const canReschedule = canCancelAppointment(a.date, a.time); // то же условие — 48 часов
+    const canReschedule = canCancelAppointment(a.date, a.time); // то же условие — 24 часа
     return `
       <div class="cab__card cab__card--active">
         <div class="cab__card-info">
           <div class="cab__card-doctor">${a.doctorName}</div>
           <div class="cab__card-spec">${a.doctorSpec}</div>
+          <div class="cab__card-service">${a.serviceName || ''}</div>
           <div class="cab__card-date">${formatDateRuFull(a.date)}, ${a.time}</div>
           <div class="cab__card-status cab__card-status--active">Активна</div>
         </div>
         <div class="cab__card-actions">
           ${canReschedule
             ? `<button class="cab__btn cab__btn--secondary" style="background:#f5f5f5;color:#002D70;margin-right:8px;" onclick="openReschedulePage(${a.id})">Перенести</button>`
-            : `<span class="cab__hint">Перенос недоступен<br>(менее 48 часов)</span>`
+            : `<span class="cab__hint">Перенос недоступен<br>(менее 24 часов)</span>`
           }
           ${canCancel
             ? `<button class="cab__btn cab__btn--danger" onclick="openCancelModal(${a.id}, '${a.doctorName}', '${a.date}', '${a.time}')">Отменить</button>`
-            : `<span class="cab__hint">Отмена недоступна<br>(менее 48 часов)</span>`
+            : `<span class="cab__hint">Отмена недоступна<br>(менее 24 часов)</span>`
           }
         </div>
       </div>
@@ -163,6 +164,7 @@ async function renderHistoryAppointments() {
       <div class="cab__card-info">
         <div class="cab__card-doctor">${a.doctorName}</div>
         <div class="cab__card-spec">${a.doctorSpec}</div>
+        <div class="cab__card-service">${a.serviceName || ''}</div>
         <div class="cab__card-date">${formatDateRuFull(a.date)}, ${a.time}</div>
         <div class="cab__card-status cab__card-status--${a.status}">
           ${a.status === 'completed' ? 'Завершена' : 'Отменена'}
@@ -172,12 +174,12 @@ async function renderHistoryAppointments() {
   `).join('');
 }
 
-// Проверка 48 часов (клиентская подсказка; финальная проверка — на сервере)
+// Проверка 24 часа (клиентская подсказка; финальная проверка — на сервере)
 function canCancelAppointment(dateStr, time) {
   const apptDate = new Date(`${dateStr}T${time}:00`);
   const now = new Date();
   const diffHours = (apptDate - now) / (1000 * 60 * 60);
-  return diffHours > 48;
+  return diffHours > 24;
 }
 
 // Открыть модалку отмены

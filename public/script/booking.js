@@ -1,33 +1,83 @@
 // booking.js — логика онлайн-записи (через backend API)
 
+let SERVICES = [];
 let DOCTORS = [];
 let currentUser = null;
+let selectedService = null;
 let selectedDoctor = null;
 let selectedDate = null;
 let selectedTime = null;
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    const [doctors, me] = await Promise.all([api.getDoctors(), api.me()]);
-    DOCTORS = doctors;
+    const [services, me] = await Promise.all([api.getServices(), api.me()]);
+    SERVICES = services;
     currentUser = me.user;
-    renderDoctors();
+    renderServices();
 
-    // Если передан doctorId в URL
+    // Если передана услуга в URL — сразу выбираем её
     const params = new URLSearchParams(window.location.search);
-    const did = parseInt(params.get('doctor'));
-    if (did) {
-      const doc = DOCTORS.find(d => d.id === did);
-      if (doc) await selectDoctor(doc);
+    const sid = parseInt(params.get('service'));
+    if (sid) {
+      const svc = SERVICES.find(s => s.id === sid);
+      if (svc) await selectService(svc);
     }
   } catch (e) {
     console.error(e);
   }
 });
 
-// ШАГ 1 — список врачей
+// ШАГ 1 — список услуг
+function renderServices() {
+  const list = document.getElementById('serviceList');
+  list.innerHTML = SERVICES.map(s => `
+    <div class="booking__doctor-card" onclick="selectService(${s.id})">
+      <div class="booking__doctor-info">
+        <div class="booking__doctor-name">${s.name}</div>
+        <div class="booking__doctor-spec">${s.category}${s.price ? ' · от ' + s.price + ' ₽' : ''}</div>
+      </div>
+      <div class="booking__doctor-arrow">→</div>
+    </div>
+  `).join('');
+}
+
+async function selectService(serviceOrId) {
+  selectedService = typeof serviceOrId === 'object'
+    ? serviceOrId
+    : SERVICES.find(s => s.id === serviceOrId);
+  selectedDoctor = null;
+  selectedDate = null;
+  selectedTime = null;
+  goToStep(2);
+  renderSelectedService();
+  await loadDoctorsForService();
+}
+
+function renderSelectedService() {
+  document.getElementById('selectedServiceInfo').innerHTML = `
+    <div class="booking__selected-doctor-card">
+      <div>
+        <strong>${selectedService.name}</strong>
+        <div>${selectedService.category}${selectedService.price ? ' · от ' + selectedService.price + ' ₽' : ''}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ШАГ 2 — список врачей, оказывающих выбранную услугу
+async function loadDoctorsForService() {
+  DOCTORS = await api.getDoctorsByService(selectedService.id);
+  renderDoctors();
+}
+
 function renderDoctors() {
   const list = document.getElementById('doctorList');
+
+  if (DOCTORS.length === 0) {
+    list.innerHTML = '<p class="cab__empty">Нет врачей, оказывающих эту услугу. Попробуйте выбрать другую.</p>';
+    return;
+  }
+
   list.innerHTML = DOCTORS.map(d => `
     <div class="booking__doctor-card" onclick="selectDoctor(${d.id})">
       <img src="${d.img}" alt="${d.name}" onerror="this.src='./img/no-photo.png'">
@@ -46,12 +96,12 @@ async function selectDoctor(doctorOrId) {
     : DOCTORS.find(d => d.id === doctorOrId);
   selectedDate = null;
   selectedTime = null;
-  goToStep(2);
+  goToStep(3);
   renderSelectedDoctor();
   await loadSlotsAndRenderCalendar();
 }
 
-// ШАГ 2 — календарь и слоты
+// ШАГ 3 — календарь и слоты
 function renderSelectedDoctor() {
   document.getElementById('selectedDoctorInfo').innerHTML = `
     <div class="booking__selected-doctor-card">
@@ -129,23 +179,24 @@ function selectSlot(time, el) {
   document.querySelectorAll('.booking__slot').forEach(s => s.classList.remove('booking__slot--selected'));
   el.classList.add('booking__slot--selected');
 
-  // Автоматически переходим к подтверждению (без шага с вводом данных)
-  setTimeout(() => goToStep(3), 300);
+  // Автоматически переходим к подтверждению
+  setTimeout(() => goToStep(4), 300);
   renderBookingSummary();
 }
 
-// ШАГ 3 — подтверждение записи (без ввода данных)
+// ШАГ 4 — подтверждение записи
 function renderBookingSummary() {
   const patientName = currentUser ? currentUser.name : 'Гость (не авторизован)';
   const patientPhone = currentUser ? currentUser.phone : '—';
 
   document.getElementById('bookingSummary').innerHTML = `
+    <div class="booking__summary-item"><span>Услуга:</span> ${selectedService.name}</div>
     <div class="booking__summary-item"><span>Врач:</span> ${selectedDoctor.name}</div>
     <div class="booking__summary-item"><span>Дата:</span> ${formatDateRuFull(selectedDate)}</div>
     <div class="booking__summary-item"><span>Время:</span> ${selectedTime}</div>
     <div class="booking__summary-item"><span>Пациент:</span> ${patientName}</div>
     <div class="booking__summary-item"><span>Телефон:</span> ${patientPhone}</div>
-    ${!currentUser ? '<div style="margin-top:12px;color:#c0392b;font-size:13px;">⚠️ Для сохранения записи в кабинете <a href="cabinet.html" style="color:#002D70;text-decoration:underline;">авторизуйтесь</a></div>' : ''}
+    ${!currentUser ? '<div style="margin-top:12px;color:#c0392b;font-size:13px;">Для сохранения записи в кабинете <a href="cabinet.html" style="color:#002D70;text-decoration:underline;">авторизуйтесь</a></div>' : ''}
   `;
 }
 
@@ -161,13 +212,13 @@ async function confirmBooking() {
   }
 
   try {
-    await api.createAppointment(selectedDoctor.id, selectedDate, selectedTime);
+    await api.createAppointment(selectedDoctor.id, selectedService.id, selectedDate, selectedTime);
 
     document.getElementById('successText').innerHTML =
-      `Вы записаны к <strong>${selectedDoctor.name}</strong><br>
+      `Вы записаны на «<strong>${selectedService.name}</strong>» к <strong>${selectedDoctor.name}</strong><br>
        ${formatDateRuFull(selectedDate)} в ${selectedTime}<br><br>
        Ждём вас по адресу: г. Нижнеудинск, ул. Кашика, 61`;
-    goToStep(4);
+    goToStep(5);
   } catch (e) {
     errEl.textContent = (e.data && e.data.error) || 'Не удалось записаться. Попробуйте другое время.';
     errEl.style.display = 'block';
@@ -178,9 +229,9 @@ async function confirmBooking() {
 
 // Навигация по шагам
 function goToStep(n) {
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const el = document.getElementById(`step${i}`);
     if (el) el.style.display = i === n ? 'block' : 'none';
   }
-  if (n === 3) renderBookingSummary();
+  if (n === 4) renderBookingSummary();
 }

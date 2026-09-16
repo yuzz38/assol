@@ -16,12 +16,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-        const [appt, doctors] = await Promise.all([
-            api.getAppointment(appointmentId),
-            api.getDoctors()
-        ]);
-        originalAppointment = appt;
-        DOCTORS = doctors;
+        originalAppointment = await api.getAppointment(appointmentId);
+        // Услуга при переносе не меняется — список врачей ограничен теми,
+        // кто оказывает ту же услугу, что была выбрана изначально
+        DOCTORS = await api.getDoctorsByService(originalAppointment.serviceId);
     } catch (e) {
         window.location.href = 'cabinet.html';
         return;
@@ -33,7 +31,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!canRescheduleAppointment(originalAppointment.date, originalAppointment.time)) {
-        alert('Перенос недоступен: до приёма осталось менее 48 часов');
+        alert('Перенос недоступен: до приёма осталось менее 24 часов');
         window.location.href = 'cabinet.html';
         return;
     }
@@ -41,10 +39,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Отображаем старую запись
     document.getElementById('oldAppointmentInfo').innerHTML = `
         <div class="booking__summary-item"><span>Текущая запись:</span></div>
+        <div class="booking__summary-item"><span>Услуга:</span> ${originalAppointment.serviceName || '—'}</div>
         <div class="booking__summary-item"><span>Врач:</span> ${originalAppointment.doctorName}</div>
         <div class="booking__summary-item"><span>Дата:</span> ${formatDateRuFull(originalAppointment.date)}</div>
         <div class="booking__summary-item"><span>Время:</span> ${originalAppointment.time}</div>
-        <div style="margin-top:12px; color:#c0392b; font-size:13px;">Выберите новые дату и время (не ранее чем через 48 часов)</div>
+        <div style="margin-top:12px; color:#c0392b; font-size:13px;">Выберите нового врача (оказывает ту же услугу), новые дату и время (не ранее чем через 24 часа)</div>
     `;
 
     renderDoctors();
@@ -98,8 +97,8 @@ function canBookOnDate(dateStr) {
     const selectedDateTime = new Date(`${dateStr}T12:00:00`);
     const now = new Date();
     const diffHours = (selectedDateTime - now) / (1000 * 60 * 60);
-    // Нельзя записаться на дату, до которой осталось менее 48 часов
-    return diffHours >= 48;
+    // Нельзя записаться на дату, до которой осталось менее 24 часов
+    return diffHours >= 24;
 }
 
 // Проверка, можно ли перенести запись (исходная) — клиентская подсказка, сервер проверяет повторно
@@ -107,7 +106,7 @@ function canRescheduleAppointment(dateStr, time) {
     const apptDate = new Date(`${dateStr}T${time}:00`);
     const now = new Date();
     const diffHours = (apptDate - now) / (1000 * 60 * 60);
-    return diffHours > 48;
+    return diffHours > 24;
 }
 
 function renderCalendar() {
@@ -121,13 +120,13 @@ function renderCalendar() {
         d.setDate(d.getDate() + i);
         const dateStr = formatDate(d);
 
-        // Проверяем, можно ли записаться на эту дату (не ранее 48 часов)
+        // Проверяем, можно ли записаться на эту дату (не ранее 24 часов)
         const canBook = canBookOnDate(dateStr);
 
         const slots = selectedDoctor.slots[dateStr] || [];
         const hasFree = slots.some(s => s.free);
 
-        // Нельзя выбрать ту же дату, что была, а также даты, до которых менее 48 часов
+        // Нельзя выбрать ту же дату, что была, а также даты, до которых менее 24 часов
         const isSameDate = (dateStr === originalAppointment.date);
         const disabled = !hasFree || isSameDate || !canBook;
 
@@ -166,16 +165,16 @@ function renderSlots(dateStr) {
     }
 
     slotsList.innerHTML = freeSlots.map(s => {
-        // Проверяем конкретное время — до него должно быть не менее 48 часов
+        // Проверяем конкретное время — до него должно быть не менее 24 часов
         const slotDateTime = new Date(`${dateStr}T${s.time}:00`);
         const now = new Date();
         const diffHours = (slotDateTime - now) / (1000 * 60 * 60);
-        const isTimeValid = diffHours >= 48;
+        const isTimeValid = diffHours >= 24;
 
         return `
             <div class="booking__slot ${!isTimeValid ? 'booking__slot--disabled' : ''} ${selectedTime === s.time ? 'booking__slot--selected' : ''}"
                  onclick="${isTimeValid ? `selectSlot('${s.time}', this)` : ''}">
-                ${s.time} ${!isTimeValid ? '(менее 48 часов)' : ''}
+                ${s.time} ${!isTimeValid ? '(менее 24 часов)' : ''}
             </div>
         `;
     }).join('');

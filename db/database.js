@@ -24,6 +24,27 @@ const DOCTORS_SEED = [
   { id: 5, name: 'Нарек Амарян Сергеев', spec: 'Врач стоматолог-терапевт', img: './img/personal/5.jpg' }
 ];
 
+// Перечень услуг клиники (можно расширять/менять цены)
+const SERVICES_SEED = [
+  { id: 1, name: 'Подробная консультация', category: 'Диагностика', price: 500 },
+  { id: 2, name: 'Рентгенодиагностика', category: 'Диагностика', price: 400 },
+  { id: 3, name: '3D-диагностика', category: 'Диагностика', price: 2500 },
+  { id: 4, name: 'Терапевтические услуги', category: 'Терапия', price: 1500 },
+  { id: 5, name: 'Протезирование зубов', category: 'Ортопедия', price: 15000 },
+  { id: 6, name: 'Имплантация зубов', category: 'Хирургия', price: 25000 },
+  { id: 7, name: 'Лечение дёсен', category: 'Терапия', price: 2000 },
+  { id: 8, name: 'Профессиональная чистка', category: 'Гигиена', price: 3000 }
+];
+
+// Какой врач оказывает какие услуги (doctor_id -> [service_id, ...])
+const DOCTOR_SERVICES_SEED = {
+  1: [1, 2, 3, 4, 8],
+  2: [1, 2, 5],
+  3: [1, 3, 6],
+  4: [1, 4, 7, 8],
+  5: [1, 4, 8]
+};
+
 function persist() {
   const data = db.export();
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -48,18 +69,47 @@ function createSchema() {
       img TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS services (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT,
+      price INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS doctor_services (
+      doctor_id INTEGER NOT NULL,
+      service_id INTEGER NOT NULL,
+      PRIMARY KEY (doctor_id, service_id),
+      FOREIGN KEY(doctor_id) REFERENCES doctors(id),
+      FOREIGN KEY(service_id) REFERENCES services(id)
+    );
+
     CREATE TABLE IF NOT EXISTS appointments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       doctor_id INTEGER NOT NULL,
+      service_id INTEGER,
       date TEXT NOT NULL,
       time TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(user_id) REFERENCES users(id),
-      FOREIGN KEY(doctor_id) REFERENCES doctors(id)
+      FOREIGN KEY(doctor_id) REFERENCES doctors(id),
+      FOREIGN KEY(service_id) REFERENCES services(id)
     );
   `);
+}
+
+// Миграция: если appointments была создана ДО появления услуг,
+// CREATE TABLE IF NOT EXISTS её не тронет — добираем колонку вручную.
+function migrateAppointmentsServiceColumn() {
+  const cols = all(`PRAGMA table_info(appointments)`);
+  const hasServiceId = cols.some(c => c.name === 'service_id');
+  if (!hasServiceId) {
+    db.run('ALTER TABLE appointments ADD COLUMN service_id INTEGER REFERENCES services(id)');
+    persist();
+    console.log('[db] миграция: добавлена колонка appointments.service_id');
+  }
 }
 
 function seedDoctors() {
@@ -68,6 +118,44 @@ function seedDoctors() {
   for (const d of DOCTORS_SEED) {
     run('INSERT INTO doctors (id, name, spec, img) VALUES (?, ?, ?, ?)', [d.id, d.name, d.spec, d.img]);
   }
+}
+
+function seedServices() {
+  const existing = get('SELECT COUNT(*) as c FROM services');
+  if (existing.c > 0) return;
+  for (const s of SERVICES_SEED) {
+    run('INSERT INTO services (id, name, category, price) VALUES (?, ?, ?, ?)', [s.id, s.name, s.category, s.price]);
+  }
+  for (const doctorId of Object.keys(DOCTOR_SERVICES_SEED)) {
+    for (const serviceId of DOCTOR_SERVICES_SEED[doctorId]) {
+      run('INSERT INTO doctor_services (doctor_id, service_id) VALUES (?, ?)', [doctorId, serviceId]);
+    }
+  }
+}
+
+// Список всех услуг клиники
+function getServices() {
+  return all('SELECT * FROM services ORDER BY category, name');
+}
+
+// Проверка: оказывает ли данный врач данную услугу (для валидации на сервере)
+function doctorProvidesService(doctorId, serviceId) {
+  const row = get(
+    'SELECT 1 as ok FROM doctor_services WHERE doctor_id = ? AND service_id = ?',
+    [doctorId, serviceId]
+  );
+  return !!row;
+}
+
+// Врачи, оказывающие конкретную услугу
+function getDoctorsForService(serviceId) {
+  return all(
+    `SELECT d.* FROM doctors d
+     INNER JOIN doctor_services ds ON ds.doctor_id = d.id
+     WHERE ds.service_id = ?
+     ORDER BY d.name`,
+    [serviceId]
+  );
 }
 
 async function init() {
@@ -79,7 +167,9 @@ async function init() {
     db = new SQL.Database();
   }
   createSchema();
+  migrateAppointmentsServiceColumn();
   seedDoctors();
+  seedServices();
   persist();
   console.log('[db] SQLite (sql.js) готова:', DB_FILE);
 }
@@ -121,4 +211,4 @@ function all(sql, params = []) {
   return rows;
 }
 
-module.exports = { init, run, get, all, insertAndGetId, persist, WORK_TIMES };
+module.exports = { init, run, get, all, insertAndGetId, persist, WORK_TIMES, getServices, getDoctorsForService, doctorProvidesService };

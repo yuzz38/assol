@@ -44,8 +44,7 @@
                         <div class="header__flex-info">
                             <a href="tel:+79642755549">+7 (964) 275 55 49</a>
                             <p>Звоните по любым вопросам</p>
-                            <a href="#" class="bvi-open" title="Версия сайта для слабовидящих">Версия сайта для слабовидящих</a>
-                        </div>
+                             </div>
                     </div>
                 </div>
             </div>
@@ -67,8 +66,7 @@
                            
                             <div class="header__flex-info">
                                 <a href="tel:+79642755549">+7 (964) 275 55 49</a>
-                                <a href="#" class="bvi-open" title="Версия сайта для слабовидящих">Версия сайта для слабовидящих</a>
-                                <p>Звоните по любым вопросам</p>
+                               <p>Звоните по любым вопросам</p>
                             </div>
                         </nav>
                         <div class="header__btn">
@@ -93,18 +91,26 @@
         <div class="container">
             <div class="cab__section">
                 <h2 class="cab__title">Запись на приём</h2>
-                <p class="cab__form-desc">Выберите врача, дату и удобное время. Запись доступна на 14 дней вперёд.</p>
+                <p class="cab__form-desc">Выберите услугу, врача, дату и удобное время. Запись доступна на 14 дней вперёд.</p>
 
                 
                 <div id="step1" class="booking__step">
-                    <h3 class="booking__step-title">Шаг 1 — Выберите врача</h3>
+                    <h3 class="booking__step-title">Шаг 1 — Выберите услугу</h3>
+                    <div id="serviceList" class="booking__doctors"></div>
+                </div>
+
+                
+                <div id="step2" class="booking__step" style="display:none">
+                    <button class="cab__btn cab__btn--secondary booking__back" onclick="goToStep(1)">← Назад</button>
+                    <h3 class="booking__step-title">Шаг 2 — Выберите врача</h3>
+                    <div id="selectedServiceInfo" class="booking__selected-doctor"></div>
                     <div id="doctorList" class="booking__doctors"></div>
                 </div>
 
           
-                <div id="step2" class="booking__step" style="display:none">
-                    <button class="cab__btn cab__btn--secondary booking__back" onclick="goToStep(1)">← Назад</button>
-                    <h3 class="booking__step-title">Шаг 2 — Выберите дату</h3>
+                <div id="step3" class="booking__step" style="display:none">
+                    <button class="cab__btn cab__btn--secondary booking__back" onclick="goToStep(2)">← Назад</button>
+                    <h3 class="booking__step-title">Шаг 3 — Выберите дату</h3>
                     <div id="selectedDoctorInfo" class="booking__selected-doctor"></div>
                     <div id="calendarGrid" class="booking__calendar"></div>
 
@@ -115,16 +121,16 @@
                 </div>
 
            
-                <div id="step3" class="booking__step" style="display:none">
-                    <button class="cab__btn cab__btn--secondary booking__back" onclick="goToStep(2)">← Назад</button>
-                    <h3 class="booking__step-title">Шаг 3 — Подтверждение записи</h3>
+                <div id="step4" class="booking__step" style="display:none">
+                    <button class="cab__btn cab__btn--secondary booking__back" onclick="goToStep(3)">← Назад</button>
+                    <h3 class="booking__step-title">Шаг 4 — Подтверждение записи</h3>
                     <div class="booking__summary" id="bookingSummary"></div>
                     <div id="bookingError" class="cab__error" style="display:none"></div>
                     <button class="cab__btn" onclick="confirmBooking()">Подтвердить запись</button>
                 </div>
 
                
-                <div id="step4" class="booking__step" style="display:none">
+                <div id="step5" class="booking__step" style="display:none">
                     <div class="booking__success">
                         <div class="booking__success-icon"></div>
                         <h3>Запись подтверждена!</h3>
@@ -202,9 +208,7 @@
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
     <script src="./script/bvi.min.js"></script>
-    <script>
-        new isvek.Bvi({ target: '.bvi-open', fontSize: 14, theme: 'white', reload: true });
-    </script>
+
     <script src="./script/utils.js"></script>
     <script src="./script/api.js"></script>
     <script src="./script/booking.js"></script>

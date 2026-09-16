@@ -8,10 +8,13 @@ const router = express.Router();
 router.use(requireAuth);
 
 const SELECT_APPT = `
-  SELECT a.id, a.user_id as userId, a.doctor_id as doctorId, a.date, a.time, a.status, a.created_at as createdAt,
-         d.name as doctorName, d.spec as doctorSpec
+  SELECT a.id, a.user_id as userId, a.doctor_id as doctorId, a.service_id as serviceId,
+         a.date, a.time, a.status, a.created_at as createdAt,
+         d.name as doctorName, d.spec as doctorSpec,
+         s.name as serviceName
   FROM appointments a
   JOIN doctors d ON d.id = a.doctor_id
+  LEFT JOIN services s ON s.id = a.service_id
 `;
 
 function getOwnAppointment(id, userId) {
@@ -32,21 +35,28 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { doctorId, date, time } = req.body || {};
-  if (!doctorId || !date || !time) {
-    return res.status(400).json({ error: 'Не выбраны врач, дата или время' });
+  const { doctorId, serviceId, date, time } = req.body || {};
+  if (!doctorId || !serviceId || !date || !time) {
+    return res.status(400).json({ error: 'Не выбраны услуга, врач, дата или время' });
   }
 
   const doctor = db.get('SELECT id FROM doctors WHERE id = ?', [doctorId]);
   if (!doctor) return res.status(404).json({ error: 'Врач не найден' });
+
+  const service = db.get('SELECT id FROM services WHERE id = ?', [serviceId]);
+  if (!service) return res.status(404).json({ error: 'Услуга не найдена' });
+
+  if (!db.doctorProvidesService(doctorId, serviceId)) {
+    return res.status(400).json({ error: 'Выбранный врач не оказывает эту услугу' });
+  }
 
   if (!isSlotFree(doctorId, date, time)) {
     return res.status(409).json({ error: 'К сожалению, этот слот уже занят. Пожалуйста, выберите другое время.' });
   }
 
   const id = db.insertAndGetId(
-    `INSERT INTO appointments (user_id, doctor_id, date, time, status) VALUES (?, ?, ?, ?, 'active')`,
-    [req.session.userId, doctorId, date, time]
+    `INSERT INTO appointments (user_id, doctor_id, service_id, date, time, status) VALUES (?, ?, ?, ?, ?, 'active')`,
+    [req.session.userId, doctorId, serviceId, date, time]
   );
 
   const appt = getOwnAppointment(id, req.session.userId);
@@ -58,8 +68,8 @@ router.put('/:id/cancel', (req, res) => {
   if (!appt) return res.status(404).json({ error: 'Запись не найдена' });
   if (appt.status !== 'active') return res.status(400).json({ error: 'Эту запись нельзя отменить' });
 
-  if (hoursUntil(appt.date, appt.time) <= 48) {
-    return res.status(400).json({ error: 'Отмена недоступна: до приёма осталось менее 48 часов' });
+  if (hoursUntil(appt.date, appt.time) <= 24) {
+    return res.status(400).json({ error: 'Отмена недоступна: до приёма осталось менее 24 часов' });
   }
 
   db.run(`UPDATE appointments SET status = 'cancelled' WHERE id = ?`, [appt.id]);
@@ -76,15 +86,20 @@ router.put('/:id/reschedule', (req, res) => {
   if (!appt) return res.status(404).json({ error: 'Запись не найдена' });
   if (appt.status !== 'active') return res.status(400).json({ error: 'Эту запись нельзя перенести' });
 
-  if (hoursUntil(appt.date, appt.time) <= 48) {
-    return res.status(400).json({ error: 'Перенос недоступен: до приёма осталось менее 48 часов' });
+  if (hoursUntil(appt.date, appt.time) <= 24) {
+    return res.status(400).json({ error: 'Перенос недоступен: до приёма осталось менее 24 часов' });
   }
-  if (hoursUntil(date, time) < 48) {
-    return res.status(400).json({ error: 'Нельзя перенести запись на время, до которого осталось менее 48 часов' });
+  if (hoursUntil(date, time) < 24) {
+    return res.status(400).json({ error: 'Нельзя перенести запись на время, до которого осталось менее 24 часов' });
   }
 
   const doctor = db.get('SELECT id FROM doctors WHERE id = ?', [doctorId]);
   if (!doctor) return res.status(404).json({ error: 'Врач не найден' });
+
+  // Услуга при переносе не меняется — новый врач обязан оказывать ту же услугу
+  if (appt.serviceId && !db.doctorProvidesService(doctorId, appt.serviceId)) {
+    return res.status(400).json({ error: 'Выбранный врач не оказывает услугу этой записи' });
+  }
 
   if (!isSlotFree(doctorId, date, time, appt.id)) {
     return res.status(409).json({ error: 'К сожалению, этот слот уже занят. Пожалуйста, выберите другое время.' });
